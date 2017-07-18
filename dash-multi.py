@@ -17,7 +17,7 @@ import random
 def to_time(decimal):
     return str(int(decimal // 1)) + ':' + str(int((decimal % 1) * 60) )
 
-conn = sqlite3.connect('phone.db')
+conn = sqlite3.connect('../Agent Queue Analysis/phone.db')
 frames = dict()
 types = [ 'daily','weekly', 'monthly']
 data, columns = daily_data(conn)
