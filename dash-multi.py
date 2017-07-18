@@ -9,6 +9,11 @@ import sqlite3
 import datetime as dt
 import random
 
+
+# hello :)
+# Written by Jake Nelson
+# July 17 2017
+
 def to_time(decimal):
     return str(int(decimal // 1)) + ':' + str(int((decimal % 1) * 60) )
 
