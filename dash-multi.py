@@ -9,6 +9,9 @@ import sqlite3
 import datetime as dt
 import random
 
+def to_time(decimal):
+    return str(int(decimal // 1)) + ':' + str(int((decimal % 1) * 60) )
+
 conn = sqlite3.connect('phone.db')
 frames = dict()
 types = [ 'daily','weekly', 'monthly']
@@ -21,7 +24,22 @@ frames['weekly'] = pd.DataFrame.from_records(data, columns=columns)
 data, columns = monthly_data(conn)
 frames['monthly'] = pd.DataFrame.from_records(data, columns=columns)
 
-app = dash.Dash()
+s1 = ['avg_call_length','avg_after_call','aux_time_per_call', 'avg_avail_time', 'avg_hold_time']
+s2 = ['avg_ring_time']
+s3 = ['staffed_per_day']
+s4 = ['held_calls', 'calls']
+s5 = ['hold_ratio']
+
+for df in frames:
+    for stat in s1+s2+s3:
+        temp = []
+        for z in frames[df][stat]:
+            temp.append('Time: ' + to_time(z))
+        frames[df][stat + '_clock'] = pd.Series(temp,frames[df][stat].index)
+
+#frames['weekly']['test_time'] = pd.Series(temp,frames['weekly']['avg_call_length'].index)
+
+
 
 stats = ["hold_ratio", "calls", "avg_call_length"]
 stats2 = ['calls', 'avg_call_length',
@@ -29,46 +47,54 @@ stats2 = ['calls', 'avg_call_length',
           'aux_time_per_call', 'avg_avail_time', 'staffed_per_day',
           'held_calls', 'hold_ratio', 'avg_hold_time']
 
-s1 = ['avg_call_length','avg_after_call','aux_time_per_call', 'avg_avail_time', 'avg_hold_time']
-s2 = ['avg_ring_time']
-s3 = ['staffed_per_day']
-s4 = ['held_calls', 'calls']
-s5 = ['hold_ratio']
-#app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
+team_color = 'B1E9FF'
+
+app = dash.Dash()
+app.css.append_css({"external_url": "https://www.w3schools.com/w3css/4/w3.css"})
 
 app.layout = html.Div([html.Link(rel="icon", href="favicon.ico"), html.Div([
     html.Table([
         html.Tr([
             html.Td(
-                html.Div([html.H4('Team Stat:',style={'font-family':'arial'}),
+                html.Div([html.Label('Team Stat:'),
                           html.Div([dcc.Dropdown(
                               id='stat-filter',
                               options=[{'label': i.upper(), 'value': i} for i in stats2],
                               value=random.choice(stats2)),
-                          ])
+
+                          ]),
+                          html.Br(),
+                          html.Label('Months to show:'),
+                          html.Div(dcc.Slider(
+                                  id='month-slider',
+                                  min=1,
+                                  max=6,
+                                  marks = {str(i) : str(i) for i in range(1,7)},
+                                  value = 3,
+                              ), style={'width':'80%', 'margin' :'auto'})
                           ], style={'width': '10vw'})
             ),
             html.Td(
-                [html.Div(dcc.Graph(id='graph4', animate=False), style={'width': '42vw', 'height': '45vh','backgroundColor' : '#BEBEBE'})]
-            , style={ 'border-color':'black','border-width':'4px', 'border-style':'solid'}),
+                [html.Div(dcc.Graph(id='graph4', animate=False), style={'width': '42vw', 'height': '45vh','backgroundColor' : team_color})]
+            , style={ 'border-color':'black','border-width':'4px', 'border-style':'solid', 'border-radius':'10px', 'backgroundColor' : team_color}),
             html.Td(
                 html.Div(dcc.Graph(id='graph1', animate=False), style={'width': '42vw', 'height': '45vh'})
             )
         ]),
         html.Tr([
             html.Td(
-                html.Div([html.H4('Select Agent:',style={'font-family':'arial'}),
+                html.Div([html.Label('Select Agent:'),
                           dcc.Dropdown(
                               id='agent-filter',
                               options=[{'label': i, 'value': i} for i in frames['daily'].name.unique()],
                               value='Patrick Savage'),
-                          html.H4('Group By:',style={'font-family':'arial'}),
+                          html.Label('Group By:'),
                           dcc.Dropdown(
                               id='date-radio',
                               options=[{'label': k.upper(), 'value': k} for k in types],
                               value='weekly'
                           ),
-                            html.H4('Date Range:',style={'font-family':'arial'}),
+                            html.Label('Date Range:'),
                           dcc.Dropdown(
                               id='date-length',
                               options=[{'label': k.upper(), 'value': k} for k in [ '3 months', 'all time']],
@@ -95,22 +121,34 @@ graphs = {"graph1": "Calls", "graph2": "Call Time", "graph3": "Holds"}
 
 
 @app.callback(dash.dependencies.Output('graph4', 'figure'),
-              [dash.dependencies.Input('stat-filter', 'value')])
-def update_multi_graph(stat):
-    past_date = dt.datetime.today() - dt.timedelta(days=90)
+              [dash.dependencies.Input('stat-filter', 'value'),
+               dash.dependencies.Input('month-slider', 'value')])
+def update_multi_graph(stat, months):
+    past_date = dt.datetime.today() - dt.timedelta(days=months * 30)
     filtered_df = frames['monthly'][frames['monthly'].start_date > past_date.strftime('%Y-%m-%d')]
     traces = []
     annotations = []
     for month in filtered_df.month.unique():
         temp_df = filtered_df[filtered_df.month == month]
         mname = dt.datetime.strptime(temp_df['start_date'].values[0],'%Y-%m')
-        traces.append(go.Bar(
-            x=temp_df['name'],
-            y=temp_df[stat],
-            opacity=0.8,
-            #marker='lines+markers+text',
-            name=mname.strftime('%b %y'),
-        ))
+
+        if stat in s1+s2+s3:
+            traces.append(go.Bar(
+                x=temp_df['name'],
+                y=temp_df[stat],
+                opacity=0.8,
+                #marker='lines+markers+text',
+                name=mname.strftime('%b %y'),
+                text=temp_df[stat+'_clock']
+            ))
+        else:
+            traces.append(go.Bar(
+                x=temp_df['name'],
+                y=temp_df[stat],
+                opacity=0.8,
+                # marker='lines+markers+text',
+                name=mname.strftime('%b %y'),
+            ))
         for d, c in temp_df[['name', stat]].values:
             annotations.append(
                 dict(x=d, y=c, xref='x1', yref='y1', text=str(c),  yanchor='bottom',
@@ -122,8 +160,8 @@ def update_multi_graph(stat):
             yaxis={'title': 'Time (Minutes)'},
             xaxis={'tickangle': -30},
             legend={'x': 0, 'y': 1},
-            plot_bgcolor='#BEBEBE',
-            paper_bgcolor='#BEBEBE',
+            plot_bgcolor=team_color,
+            paper_bgcolor=team_color,
             barmode='group',
             # annotations = annotations
         )
@@ -133,8 +171,8 @@ def update_multi_graph(stat):
             yaxis={'title': 'Time (Seconds)'},
             xaxis={'tickangle': -30},
             legend={'x': 0, 'y': 1},
-            plot_bgcolor='#BEBEBE',
-            paper_bgcolor='#BEBEBE',
+            plot_bgcolor=team_color,
+            paper_bgcolor=team_color,
             barmode='group',
             # annotations = annotations
         )
@@ -144,8 +182,8 @@ def update_multi_graph(stat):
             yaxis={'title': 'Time (Hours)'},
             xaxis={'tickangle': -30},
             legend={'x': 0, 'y': 1},
-            plot_bgcolor='#BEBEBE',
-            paper_bgcolor='#BEBEBE',
+            plot_bgcolor=team_color,
+            paper_bgcolor=team_color,
             barmode='group',
             # annotations = annotations
         )
@@ -156,8 +194,8 @@ def update_multi_graph(stat):
             yaxis={'title': 'Calls'},
             xaxis={'tickangle': -30},
             legend={'x': 0, 'y': 1},
-            plot_bgcolor='#BEBEBE',
-            paper_bgcolor='#BEBEBE',
+            plot_bgcolor=team_color,
+            paper_bgcolor=team_color,
             barmode='group',
             # annotations = annotations
         )
@@ -167,8 +205,8 @@ def update_multi_graph(stat):
             yaxis={'title': 'Percent (%)'},
             xaxis={'tickangle': -30},
             legend={'x': 0, 'y': 1},
-            plot_bgcolor='#BEBEBE',
-            paper_bgcolor='#BEBEBE',
+            plot_bgcolor=team_color,
+            paper_bgcolor=team_color,
             barmode='group',
             # annotations = annotations
         )
@@ -204,7 +242,7 @@ def generate_callback_box(graph):
                 x=filtered_df['start_date'],
                 y=filtered_df['calls'],
                  opacity=0.8,
-                name='Calls Taken'
+                name='Calls Taken',
             ))
             for d, c in filtered_df[['start_date', 'calls']].values:
                 annotations.append(
@@ -227,6 +265,7 @@ def generate_callback_box(graph):
                     x=filtered_df['start_date'],
                     y=filtered_df[col],
                     opacity=0.8,
+                    text = filtered_df[col+'_clock'],
                     name=col.upper()
                 ))
             layout = go.Layout(
@@ -253,6 +292,14 @@ def generate_callback_box(graph):
             traces.append(go.Scatter(
                 x=filtered_df['start_date'],
                 y=filtered_df['avg_hold_time'],
+                text = filtered_df['avg_hold_time_clock'],
+                mode='markers+lines',
+                textposition = 'above',
+                textfont=dict(
+                    family='sans serif',
+                    size=18,
+                    color='#ff7f0e'
+                ),
                 name='Hold Time',
                 yaxis='y2'
             ))
