@@ -15,7 +15,7 @@ import random
 # July 17 2017
 
 def to_time(decimal):
-    return str(int(decimal // 1)) + ':' + str(int((decimal % 1) * 60) )
+    return str(int(decimal // 1)) + ':' + '{:02d}'.format((int((decimal % 1) * 60) ))
 
 conn = sqlite3.connect('../Agent Queue Analysis/phone.db')
 frames = dict()
@@ -133,7 +133,7 @@ def update_multi_graph(stat, months):
     filtered_df = frames['monthly'][frames['monthly'].start_date > past_date.strftime('%Y-%m-%d')]
     traces = []
     annotations = []
-    for month in filtered_df.month.unique():
+    for month in sorted(filtered_df.month.unique()):
         temp_df = filtered_df[filtered_df.month == month]
         mname = dt.datetime.strptime(temp_df['start_date'].values[0],'%Y-%m')
 
@@ -143,7 +143,7 @@ def update_multi_graph(stat, months):
                 y=temp_df[stat],
                 opacity=0.8,
                 #marker='lines+markers+text',
-                name=mname.strftime('%b %y'),
+                name=mname.strftime('%b %Y'),
                 text=temp_df[stat+'_clock']
             ))
         else:
